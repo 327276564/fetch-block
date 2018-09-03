@@ -1,4 +1,4 @@
-package main
+package parse
 
 import (
 	"crypto/x509"
@@ -72,10 +72,6 @@ type ChaincodeInput struct {
 type Endorsement struct {
 	SignatureHeader *SignatureHeader `json:"signature_header,omitempty"`
 	Signature       []byte           `json:"signature,omitempty"`
-}
-
-type eventAdapter struct {
-	block_channel chan *pb.Event_Block
 }
 
 type SignatureHeader struct {
