@@ -14,7 +14,7 @@ import (
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 	pbmsp "github.com/hyperledger/fabric/protos/msp"
 	ab "github.com/hyperledger/fabric/protos/orderer"
-	pb "github.com/hyperledger/fabric/protos/peer"
+	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
 )
 
@@ -39,7 +39,7 @@ func deserializeIdentity(serializedID []byte) (*x509.Certificate, error) {
 }
 
 func copyChannelHeaderToLocalChannelHeader(localChannelHeader *ChannelHeader,
-	chHeader *cb.ChannelHeader, chaincodeHeaderExtension *pb.ChaincodeHeaderExtension) {
+	chHeader *cb.ChannelHeader, chaincodeHeaderExtension *peer.ChaincodeHeaderExtension) {
 	localChannelHeader.Type = chHeader.Type
 	localChannelHeader.Version = chHeader.Version
 	localChannelHeader.Timestamp = chHeader.Timestamp
@@ -49,7 +49,7 @@ func copyChannelHeaderToLocalChannelHeader(localChannelHeader *ChannelHeader,
 	localChannelHeader.ChaincodeId = chaincodeHeaderExtension.ChaincodeId
 }
 
-func copyChaincodeSpecToLocalChaincodeSpec(localChaincodeSpec *ChaincodeSpec, chaincodeSpec *pb.ChaincodeSpec) {
+func copyChaincodeSpecToLocalChaincodeSpec(localChaincodeSpec *ChaincodeSpec, chaincodeSpec *peer.ChaincodeSpec) {
 	localChaincodeSpec.Type = chaincodeSpec.Type
 	localChaincodeSpec.ChaincodeId = chaincodeSpec.ChaincodeId
 	localChaincodeSpec.Timeout = chaincodeSpec.Timeout
@@ -60,7 +60,7 @@ func copyChaincodeSpecToLocalChaincodeSpec(localChaincodeSpec *ChaincodeSpec, ch
 	localChaincodeSpec.Input = chaincodeInput
 }
 
-func copyEndorsementToLocalEndorsement(localTransaction *Transaction, allEndorsements []*pb.Endorsement) {
+func copyEndorsementToLocalEndorsement(localTransaction *Transaction, allEndorsements []*peer.Endorsement) {
 	for _, endorser := range allEndorsements {
 		endorsement := &Endorsement{}
 		endorserSignatureHeader := &cb.SignatureHeader{}
@@ -139,7 +139,7 @@ func getSignatureHeaderFromBlockData(header *cb.SignatureHeader) *SignatureHeade
 func addTransactionValidation(block *Block, tran *Transaction, txIdx int) error {
 	if len(block.TransactionFilter) > txIdx {
 		tran.ValidationCode = uint8(block.TransactionFilter[txIdx])
-		tran.ValidationCodeName = pb.TxValidationCode_name[int32(tran.ValidationCode)]
+		tran.ValidationCodeName = peer.TxValidationCode_name[int32(tran.ValidationCode)]
 		return nil
 	}
 	return fmt.Errorf("Invalid index or transaction filler. Index: %d", txIdx)
@@ -162,11 +162,12 @@ type TxPerf struct {
 	LatencyNs              int64 // latency in nanoseconds
 }
 
-func processBlock(blockEvent *pb.Event_Block) Block {
-	var block *cb.Block
+func processBlock(block *cb.Block, size uint64) Block {
 	var localBlock Block
 
-	block = blockEvent.Block
+	localBlock.Size = size
+	localBlock.BlockTimeStamp = time.Now().UTC()
+
 	localBlock.Header = block.Header
 	localBlock.TransactionFilter = ledgerUtil.NewTxValidationFlags(len(block.Data.Data))
 
@@ -189,6 +190,7 @@ func processBlock(blockEvent *pb.Event_Block) Block {
 
 	for txIndex, data := range block.Data.Data {
 		localTransaction := &Transaction{}
+		localTransaction.Size = uint64(len(data))
 		//Get envelope which is stored as byte array in the data field.
 		envelope, err := utils.GetEnvelopeFromBlock(data)
 		if err != nil {
@@ -204,7 +206,7 @@ func processBlock(blockEvent *pb.Event_Block) Block {
 		if err != nil {
 			fmt.Printf("Error unmarshaling channel header: %s\n", err)
 		}
-		headerExtension := &pb.ChaincodeHeaderExtension{}
+		headerExtension := &peer.ChaincodeHeaderExtension{}
 		if err := proto.Unmarshal(chHeader.Extension, headerExtension); err != nil {
 			fmt.Printf("Error unmarshaling chaincode header extension: %s\n", err)
 		}
@@ -220,7 +222,7 @@ func processBlock(blockEvent *pb.Event_Block) Block {
 		localTransaction.SignatureHeader = getSignatureHeaderFromBlockData(localSignatureHeader)
 		//localTransaction.SignatureHeader.Nonce = localSignatureHeader.Nonce
 		//localTransaction.SignatureHeader.Certificate, _ = deserializeIdentity(localSignatureHeader.Creator)
-		transaction := &pb.Transaction{}
+		transaction := &peer.Transaction{}
 		if err := proto.Unmarshal(payload.Data, transaction); err != nil {
 			fmt.Printf("Error unmarshaling transaction: %s\n", err)
 		}
@@ -238,11 +240,11 @@ func processBlock(blockEvent *pb.Event_Block) Block {
 		//signatureHeader.Nonce = localSignatureHeader.Nonce
 		//localTransaction.TxActionSignatureHeader = signatureHeader
 
-		chaincodeProposalPayload := &pb.ChaincodeProposalPayload{}
+		chaincodeProposalPayload := &peer.ChaincodeProposalPayload{}
 		if err := proto.Unmarshal(chaincodeActionPayload.ChaincodeProposalPayload, chaincodeProposalPayload); err != nil {
 			fmt.Printf("Error unmarshaling chaincode proposal payload: %s\n", err)
 		}
-		chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{}
+		chaincodeInvocationSpec := &peer.ChaincodeInvocationSpec{}
 		if err := proto.Unmarshal(chaincodeProposalPayload.Input, chaincodeInvocationSpec); err != nil {
 			fmt.Printf("Error unmarshaling chaincode invocationSpec: %s\n", err)
 		}
@@ -250,13 +252,13 @@ func processBlock(blockEvent *pb.Event_Block) Block {
 		copyChaincodeSpecToLocalChaincodeSpec(localChaincodeSpec, chaincodeInvocationSpec.ChaincodeSpec)
 		localTransaction.ChaincodeSpec = localChaincodeSpec
 		copyEndorsementToLocalEndorsement(localTransaction, chaincodeActionPayload.Action.Endorsements)
-		proposalResponsePayload := &pb.ProposalResponsePayload{}
+		proposalResponsePayload := &peer.ProposalResponsePayload{}
 		if err := proto.Unmarshal(chaincodeActionPayload.Action.ProposalResponsePayload, proposalResponsePayload); err != nil {
 			fmt.Printf("Error unmarshaling proposal response payload: %s\n", err)
 		}
 		localTransaction.ProposalHash = proposalResponsePayload.ProposalHash
 		localTransaction.Response = chaincodeAction.Response
-		events := &pb.ChaincodeEvent{}
+		events := &peer.ChaincodeEvent{}
 		if err := proto.Unmarshal(chaincodeAction.Events, events); err != nil {
 			fmt.Printf("Error unmarshaling chaincode action events:%s\n", err)
 		}
@@ -290,6 +292,6 @@ func processBlock(blockEvent *pb.Event_Block) Block {
 	return localBlock
 }
 
-func ParseBlock(blockEvent *pb.Event_Block) Block {
-	return processBlock(blockEvent)
+func ParseBlock(blockEvent *cb.Block, size uint64) Block {
+	return processBlock(blockEvent, size)
 }

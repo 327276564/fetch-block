@@ -7,15 +7,19 @@ import (
 	cb "github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 	pb "github.com/hyperledger/fabric/protos/peer"
+	"time"
 )
 
 type Block struct {
 	Header                *cb.BlockHeader     `json:"header,omitempty"`
+	BlockTimeStamp   time.Time `json:"block_time_stamp"`
 	Transactions          []*Transaction      `json:"transactions,omitempty"`
 	BlockCreatorSignature *SignatureMetadata  `json:"block_creator_signature,omitempty"`
 	LastConfigBlockNumber *LastConfigMetadata `json:"last_config_block_number,omitempty"`
 	TransactionFilter     []uint8             `json:"transaction_filter,omitempty"`
 	OrdererKafkaMetadata  *OrdererMetadata    `json:"orderer_kafka_metadata,omitempty"`
+	Size uint64 `json:"size"`
+	Error                 error
 }
 
 type SignatureMetadata struct {
@@ -47,6 +51,7 @@ type Transaction struct {
 	// Capture transaction validation code
 	ValidationCode     uint8  `json:"validation_code"`
 	ValidationCodeName string `json:"validation_code_name,omitempty"`
+	Size uint64 `json:"size"`
 }
 
 type ChannelHeader struct {

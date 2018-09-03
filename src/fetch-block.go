@@ -63,7 +63,7 @@ func prettyprint(b []byte) ([]byte, error) {
 }
 
 func processBlock(blockEvent *pb.Event_Block) parse.Block {
-	return parse.ParseBlock(blockEvent)
+	return parse.ParseBlock(blockEvent.Block, uint64(len(blockEvent.Block.String())))
 }
 
 func main() {
