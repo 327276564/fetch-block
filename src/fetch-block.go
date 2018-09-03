@@ -53,11 +53,11 @@ func (adapter *eventAdapter) Disconnected(err error) {
 	os.Exit(1)
 }
 
-func startEventClient(peerEventAddress string) *eventAdapter {
+func startEventClient(peerEventAddress, domain, tlsCert string) *eventAdapter {
 	var eventClient *EventsClient
 	var err error
 	adapter := &eventAdapter{block_channel: make(chan *pb.Event_Block, 100)}
-	eventClient, _ = NewEventsClient(peerEventAddress, 10, adapter)
+	eventClient, _ = NewEventsClient(peerEventAddress, domain, tlsCert, 10, adapter)
 	if err = eventClient.Start(); err != nil {
 		fmt.Printf("could not start chat %s\n", err)
 		eventClient.Stop()
@@ -224,7 +224,7 @@ type ThroughPutPerf struct {
 
 var throughPutPerf ThroughPutPerf
 
-func processBlock(blockEvent *pb.Event_Block) {
+func processBlock(blockEvent *pb.Event_Block) Block {
 	var block *cb.Block
 	var localBlock Block
 	var now time.Time
@@ -395,6 +395,8 @@ func processBlock(blockEvent *pb.Event_Block) {
 		f.WriteString(string(blockPerfJSONString))
 		f.Close()
 	}
+
+	return localBlock
 }
 
 func main() {
@@ -447,7 +449,7 @@ func main() {
 	//However, we are interested in receiving all blocks.
 	interestedEvents = append(interestedEvents, event)
 	fmt.Printf("Starting Client\n")
-	adapter := startEventClient(peerEventAddress)
+	adapter := startEventClient(peerEventAddress, "", "")
 	if adapter == nil {
 		fmt.Println("Error starting EventClient")
 		return

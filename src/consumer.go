@@ -42,6 +42,8 @@ const defaultTimeout = time.Second * 10
 type EventsClient struct {
 	sync.RWMutex
 	peerAddress string
+	domain string
+	tlsCert string
 	regTimeout  time.Duration
 	stream      pb.Events_ChatClient
 	adapter     EventAdapter
@@ -54,7 +56,7 @@ type EventAdapter interface {
 }
 
 //NewEventsClient Returns a new grpc.ClientConn to the configured local PEER.
-func NewEventsClient(peerAddress string, regTimeout time.Duration, adapter EventAdapter) (*EventsClient, error) {
+func NewEventsClient(peerAddress, domain, tlsCert string, regTimeout time.Duration, adapter EventAdapter) (*EventsClient, error) {
 	var err error
 	if regTimeout < 100*time.Millisecond {
 		regTimeout = 100 * time.Millisecond
@@ -63,14 +65,14 @@ func NewEventsClient(peerAddress string, regTimeout time.Duration, adapter Event
 		regTimeout = 60 * time.Second
 		err = fmt.Errorf("regTimeout > 60, setting to 60 sec")
 	}
-	return &EventsClient{sync.RWMutex{}, peerAddress, regTimeout, nil, adapter}, err
+	return &EventsClient{sync.RWMutex{}, peerAddress, domain, tlsCert, regTimeout, nil, adapter}, err
 }
 
 //newEventsClientConnectionWithAddress Returns a new grpc.ClientConn to the configured local PEER.
-func newEventsClientConnectionWithAddress(peerAddress string) (*grpc.ClientConn, error) {
-	if viper.GetBool("tls.enabled") {
+func newEventsClientConnectionWithAddress(peerAddress, sn, tlsCert string, tlsEnable bool) (*grpc.ClientConn, error) {
+	if tlsEnable {
 		fmt.Printf("TLS is enabled\n")
-		return NewClientConnectionWithAddress(peerAddress, true, true, InitTLSForFetchBlock())
+		return NewClientConnectionWithAddress(peerAddress, true, true, InitTLSForFetchBlock(sn, tlsCert))
 	}
 	return NewClientConnectionWithAddress(peerAddress, true, false, nil)
 }
@@ -233,7 +235,11 @@ func (ec *EventsClient) processEvents() error {
 
 //Start establishes connection with Event hub and registers interested events with it
 func (ec *EventsClient) Start() error {
-	conn, err := newEventsClientConnectionWithAddress(ec.peerAddress)
+	tlsEnable := false
+	if ec.tlsCert != "" {
+		tlsEnable = true
+	}
+	conn, err := newEventsClientConnectionWithAddress(ec.peerAddress, ec.domain, ec.tlsCert, tlsEnable)
 	if err != nil {
 		return fmt.Errorf("could not create client conn to %s:%s", ec.peerAddress, err)
 	}
@@ -289,20 +295,26 @@ func NewClientConnectionWithAddress(peerAddress string, block bool, tslEnabled b
 }
 
 // InitTLSForPeer returns TLS credentials for peer
-func InitTLSForFetchBlock() credentials.TransportCredentials {
-	var sn string
-	if viper.GetString("tls.serverhostoverride") != "" {
-		sn = viper.GetString("tls.serverhostoverride")
-	}
-	var creds credentials.TransportCredentials
-	if viper.GetString("tls.rootcert.file") != "" {
-		var err error
-		creds, err = credentials.NewClientTLSFromFile(viper.GetString("tls.rootcert.file"), sn)
-		if err != nil {
-			fmt.Printf("Failed to create TLS credentials %v", err)
+func InitTLSForFetchBlock(sn, tlsCert string) credentials.TransportCredentials {
+	if sn == "" {
+		if viper.GetString("tls.serverhostoverride") != "" {
+			sn = viper.GetString("tls.serverhostoverride")
 		}
-	} else {
-		creds = credentials.NewClientTLSFromCert(nil, sn)
 	}
+
+	var creds credentials.TransportCredentials
+
+	if tlsCert == "" {
+		if viper.GetString("tls.rootcert.file") != "" {
+			var err error
+			creds, err = credentials.NewClientTLSFromFile(viper.GetString("tls.rootcert.file"), sn)
+			if err != nil {
+				fmt.Printf("Failed to create TLS credentials %v", err)
+			}
+		} else {
+			creds = credentials.NewClientTLSFromCert(nil, sn)
+		}
+	}
+
 	return creds
 }
