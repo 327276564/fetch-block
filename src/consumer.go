@@ -42,8 +42,8 @@ const defaultTimeout = time.Second * 10
 type EventsClient struct {
 	sync.RWMutex
 	peerAddress string
-	domain string
-	tlsCert string
+	domain      string
+	tlsCert     string
 	regTimeout  time.Duration
 	stream      pb.Events_ChatClient
 	adapter     EventAdapter

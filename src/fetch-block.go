@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
+	"github.com/cendhu/fetch-block/src/events/parse"
 	mspmgmt "github.com/hyperledger/fabric/msp/mgmt"
 	pb "github.com/hyperledger/fabric/protos/peer"
 	"github.com/spf13/viper"
-	"github.com/cendhu/fetch-block/src/events/parse"
+	"os"
+	"strings"
 )
 
 var expName string // folder of this name is created where all data goes
 var interestedEvents []*pb.Interest
 var log_event, log_block, log_blockperf bool = false, false, false
-
 
 type eventAdapter struct {
 	block_channel chan *pb.Event_Block

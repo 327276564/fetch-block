@@ -17,7 +17,6 @@ limitations under the License.
 package producer
 
 import (
-
 	"github.com/hyperledger/fabric/protos/common"
 	pb "github.com/hyperledger/fabric/protos/peer"
 )
